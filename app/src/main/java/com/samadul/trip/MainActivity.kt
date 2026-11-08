@@ -21,7 +21,7 @@ class MainActivity : AppCompatActivity() {
     private val executor = Executors.newCachedThreadPool()
     private lateinit var rootContainer: FrameLayout
 
-    private var baseUrl: String = "http://10.0.2.2:3000"
+    private var baseUrl: String = "https://trip-splitter-mauve.vercel.app"
     private var accessToken: String? = null
     private var currentUser: UserProfile? = null
 
@@ -32,7 +32,12 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         val prefs = getSharedPreferences("trip_splitter_prefs", Context.MODE_PRIVATE)
-        baseUrl = prefs.getString("base_url", "http://10.0.2.2:3000") ?: "http://10.0.2.2:3000"
+        val savedUrl = prefs.getString("base_url", "https://trip-splitter-mauve.vercel.app")
+        baseUrl = if (savedUrl.isNullOrBlank() || savedUrl == "http://10.0.2.2:3000") {
+            "https://trip-splitter-mauve.vercel.app"
+        } else {
+            savedUrl
+        }
         accessToken = prefs.getString("access_token", null)
         val savedUserId = prefs.getString("user_id", null)
         val savedUserName = prefs.getString("user_name", null)
@@ -156,7 +161,7 @@ class MainActivity : AppCompatActivity() {
         }
         val serverInput = EditText(this).apply {
             setText(baseUrl)
-            hint = "https://your-app.vercel.app or http://10.0.2.2:3000"
+            hint = "https://trip-splitter-mauve.vercel.app"
             textSize = 14f
             setSingleLine(true)
             background = cardBg("#F8FAFC", "#CBD5E1", 10)

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
-import { dbFindUserById } from "./db";
+import { dbFindUserById, dbFindUserByName } from "./db";
 import { Profile } from "@/types/database";
 
 export const ACCESS_TOKEN_COOKIE = "trip_access_token";
@@ -111,7 +111,17 @@ export async function requireAuth(
     };
   }
 
-  const profile = await dbFindUserById(decoded.id);
+  let profile: Profile | null = await dbFindUserById(decoded.id);
+  if (!profile && decoded.full_name) {
+    const byName = await dbFindUserByName(decoded.full_name);
+    if (byName) {
+      profile = {
+        id: byName.id,
+        full_name: byName.full_name,
+        created_at: byName.created_at,
+      };
+    }
+  }
   if (!profile) {
     return {
       context: null,

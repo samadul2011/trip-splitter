@@ -8,6 +8,7 @@ interface AppContextType {
   user: Profile | null;
   accessToken: string | null;
   loadingAuth: boolean;
+  dbMode: "neon" | "local" | null;
   bengaliNumbers: boolean;
   toggleBengaliNumbers: () => void;
   setAuthSession: (token: string, user: Profile) => void;
@@ -26,6 +27,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Profile | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [dbMode, setDbMode] = useState<"neon" | "local" | null>(null);
   const [bengaliNumbers, setBengaliNumbers] = useState(false);
 
   useEffect(() => {
@@ -52,10 +54,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       headers["Authorization"] = `Bearer ${savedToken}`;
     }
 
-    fetch("/api/auth/me", { headers })
+    fetch("/api/auth/me", { headers, cache: "no-store" })
       .then(async (res) => {
         if (res.ok) {
           const data = await res.json();
+          if (data.db_mode) {
+            setDbMode(data.db_mode);
+          }
           if (data.user) {
             setUser(data.user);
             localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(data.user));
@@ -115,6 +120,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       const res = await fetch(url, {
+        cache: "no-store",
         ...init,
         headers,
       });
@@ -138,6 +144,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         user,
         accessToken,
         loadingAuth,
+        dbMode,
         bengaliNumbers,
         toggleBengaliNumbers,
         setAuthSession,

@@ -20,7 +20,7 @@ import { Trip } from "@/types/database";
 import { formatDate, formatTaka, toBengaliDigits } from "@/lib/format";
 
 export default function DashboardPage() {
-  const { user, loadingAuth, apiFetch, bengaliNumbers } = useApp();
+  const { user, loadingAuth, dbMode, apiFetch, bengaliNumbers } = useApp();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loadingTrips, setLoadingTrips] = useState(true);
 
@@ -59,6 +59,20 @@ export default function DashboardPage() {
       <Navbar />
 
       <main className="mx-auto max-w-4xl px-4 pt-6 sm:px-6">
+        {isAdmin && dbMode === "local" && (
+          <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 shadow-sm">
+            <p className="font-bold">
+              ⚠️ Database Mode: Temporary Local Storage (Neon DATABASE_URL not set on Vercel yet)
+            </p>
+            <p className="mt-1 text-amber-800">
+              To save all added/edited expenses permanently on Vercel, open your{" "}
+              <span className="font-semibold">Vercel Project → Settings → Environment Variables</span>, add{" "}
+              <code className="rounded bg-amber-100 px-1 py-0.5 font-mono font-bold">DATABASE_URL</code>{" "}
+              with your Neon PostgreSQL connection string, and click <span className="font-semibold">Redeploy</span>.
+            </p>
+          </div>
+        )}
+
         {/* Welcome Banner */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-600 p-6 text-white shadow-lg shadow-emerald-700/15 sm:p-8">
           <div className="relative z-10 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">

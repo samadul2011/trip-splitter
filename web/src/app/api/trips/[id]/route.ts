@@ -8,6 +8,8 @@ import {
   dbUpdateTripStatus,
 } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 const updateTripSchema = z.object({
   is_completed: z.boolean().optional(),
   name: z.string().trim().min(1).optional(),

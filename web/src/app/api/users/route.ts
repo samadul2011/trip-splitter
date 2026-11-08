@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { dbSearchUsers } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/users?q=searchTerm
  * Searches existing users from `profiles` by `full_name` (used on /create-trip and Android).

@@ -80,6 +80,8 @@ object ApiClient {
             requestMethod = method
             connectTimeout = 15000
             readTimeout = 15000
+            useCaches = false
+            setRequestProperty("Cache-Control", "no-cache")
             setRequestProperty("Accept", "application/json")
             if (!token.isNullOrBlank()) {
                 setRequestProperty("Authorization", "Bearer $token")

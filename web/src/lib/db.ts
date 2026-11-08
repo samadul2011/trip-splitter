@@ -45,7 +45,10 @@ interface LocalDbStructure {
   settlement_statuses?: StoredSettlementStatus[];
 }
 
-const LOCAL_DB_PATH = path.join(process.cwd(), "database", "local-db.json");
+const BUNDLED_DB_PATH = path.join(process.cwd(), "database", "local-db.json");
+const TMP_DB_PATH = path.join("/tmp", "trip-splitter-local-db.json");
+
+let inMemoryDbCache: LocalDbStructure | null = null;
 
 const DEFAULT_USERS: StoredUser[] = [
   {
@@ -93,32 +96,42 @@ const DEFAULT_USERS: StoredUser[] = [
 ];
 
 function readLocalDb(): LocalDbStructure {
-  try {
-    if (fs.existsSync(LOCAL_DB_PATH)) {
-      const raw = fs.readFileSync(LOCAL_DB_PATH, "utf-8");
-      const parsed = JSON.parse(raw) as LocalDbStructure;
-      if (parsed && Array.isArray(parsed.profiles)) {
-        if (!Array.isArray(parsed.settlement_statuses)) {
-          parsed.settlement_statuses = [];
-        }
-        let updated = false;
-        for (const defUser of DEFAULT_USERS) {
-          const existing = parsed.profiles.find(
-            (p) => p.full_name.toLowerCase() === defUser.full_name.toLowerCase()
-          );
-          if (!existing) {
-            parsed.profiles.push(defUser);
-            updated = true;
+  if (inMemoryDbCache) {
+    return inMemoryDbCache;
+  }
+
+  // Prefer /tmp copy on serverless (Vercel) if it was already written during this instance's lifecycle
+  const candidatePaths = [TMP_DB_PATH, BUNDLED_DB_PATH];
+
+  for (const filePath of candidatePaths) {
+    try {
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, "utf-8");
+        const parsed = JSON.parse(raw) as LocalDbStructure;
+        if (parsed && Array.isArray(parsed.profiles)) {
+          if (!Array.isArray(parsed.settlement_statuses)) {
+            parsed.settlement_statuses = [];
           }
+          let updated = false;
+          for (const defUser of DEFAULT_USERS) {
+            const existing = parsed.profiles.find(
+              (p) => p.full_name.toLowerCase() === defUser.full_name.toLowerCase()
+            );
+            if (!existing) {
+              parsed.profiles.push(defUser);
+              updated = true;
+            }
+          }
+          inMemoryDbCache = parsed;
+          if (updated) {
+            writeLocalDb(parsed);
+          }
+          return parsed;
         }
-        if (updated) {
-          writeLocalDb(parsed);
-        }
-        return parsed;
       }
+    } catch {
+      // Try next path
     }
-  } catch {
-    // Fallback to initial structure
   }
 
   const initial: LocalDbStructure = {
@@ -128,34 +141,66 @@ function readLocalDb(): LocalDbStructure {
     expenses: [],
     settlement_statuses: [],
   };
+  inMemoryDbCache = initial;
   writeLocalDb(initial);
   return initial;
 }
 
 function writeLocalDb(data: LocalDbStructure): void {
+  inMemoryDbCache = data;
+  const serialized = JSON.stringify(data, null, 2);
+
+  // Try writing to project database/local-db.json first (works in local dev)
   try {
-    const dir = path.dirname(LOCAL_DB_PATH);
+    const dir = path.dirname(BUNDLED_DB_PATH);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2), "utf-8");
+    fs.writeFileSync(BUNDLED_DB_PATH, serialized, "utf-8");
+    return;
+  } catch {
+    // On Vercel serverless, /var/task is read-only; fall back to /tmp
+  }
+
+  try {
+    fs.writeFileSync(TMP_DB_PATH, serialized, "utf-8");
   } catch (err) {
-    console.error("Failed to write local-db.json:", err);
+    console.error("Failed to write fallback local-db.json to /tmp:", err);
   }
 }
 
-export function isNeonConfigured(): boolean {
-  const url = process.env.DATABASE_URL?.trim();
-  return Boolean(
-    url &&
+export function getDatabaseUrl(): string | null {
+  const candidates = [
+    process.env.DATABASE_URL,
+    process.env.POSTGRES_URL,
+    process.env.NEON_DATABASE_URL,
+    process.env.DATABASE_URL_UNPOOLED,
+    process.env.POSTGRES_URL_NON_POOLING,
+  ];
+  for (const raw of candidates) {
+    const url = raw?.trim();
+    if (
+      url &&
       url.startsWith("postgres") &&
       !url.includes("ep-example.ap-southeast-1.aws.neon.tech") &&
       !url.includes("your_password")
-  );
+    ) {
+      return url;
+    }
+  }
+  return null;
+}
+
+export function isNeonConfigured(): boolean {
+  return Boolean(getDatabaseUrl());
 }
 
 async function getNeonSql(): Promise<NeonQueryFunction<false, false>> {
-  const sql = neon(process.env.DATABASE_URL!.trim());
+  const connectionString = getDatabaseUrl();
+  if (!connectionString) {
+    throw new Error("Neon DATABASE_URL is not configured.");
+  }
+  const sql = neon(connectionString);
   if (neonInitialized) return sql;
 
   await sql`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`;
@@ -211,18 +256,82 @@ async function getNeonSql(): Promise<NeonQueryFunction<false, false>> {
   `;
 
   await sql`
-    INSERT INTO profiles (full_name, password_hash)
+    INSERT INTO profiles (id, full_name, password_hash)
     VALUES
-      ('Sabuj', '123456'),
-      ('Limon', '123456'),
-      ('Arian', '123456'),
-      ('Samadul', '635504'),
-      ('Tanha', '123456'),
-      ('Sabina', '123456'),
-      ('Luto', '123456')
+      ('11111111-1111-4111-8111-111111111101'::uuid, 'Sabuj', '123456'),
+      ('11111111-1111-4111-8111-111111111102'::uuid, 'Limon', '123456'),
+      ('11111111-1111-4111-8111-111111111103'::uuid, 'Arian', '123456'),
+      ('11111111-1111-4111-8111-111111111104'::uuid, 'Samadul', '635504'),
+      ('11111111-1111-4111-8111-111111111105'::uuid, 'Tanha', '123456'),
+      ('11111111-1111-4111-8111-111111111106'::uuid, 'Sabina', '123456'),
+      ('11111111-1111-4111-8111-111111111107'::uuid, 'Luto', '123456')
     ON CONFLICT (full_name) DO UPDATE
       SET password_hash = EXCLUDED.password_hash
   `;
+
+  // If Neon has 0 trips so far, seed any initial trips from bundled local-db.json
+  try {
+    const existingTripsCount = await sql`SELECT COUNT(*)::int AS cnt FROM trips`;
+    if (existingTripsCount && Number(existingTripsCount[0]?.cnt) === 0) {
+      const bundled = readLocalDb();
+      const neonProfiles = await sql`SELECT id, full_name FROM profiles`;
+      const nameToNeonId = new Map<string, string>();
+      for (const np of neonProfiles) {
+        nameToNeonId.set(String(np.full_name).toLowerCase(), String(np.id));
+      }
+      const localIdToNeonId = new Map<string, string>();
+      for (const lp of bundled.profiles) {
+        const mapped = nameToNeonId.get(lp.full_name.toLowerCase());
+        if (mapped) {
+          localIdToNeonId.set(lp.id, mapped);
+        }
+      }
+
+      for (const t of bundled.trips) {
+        const creatorNeonId =
+          localIdToNeonId.get(t.created_by) ||
+          nameToNeonId.get("samadul");
+        if (!creatorNeonId) continue;
+
+        await sql`
+          INSERT INTO trips (id, name, created_by, is_completed, created_at)
+          VALUES (${t.id}::uuid, ${t.name}, ${creatorNeonId}::uuid, ${Boolean(t.is_completed)}, ${t.created_at}::timestamptz)
+          ON CONFLICT (id) DO NOTHING
+        `;
+      }
+
+      for (const tm of bundled.trip_members) {
+        const memberNeonId = localIdToNeonId.get(tm.user_id);
+        if (!memberNeonId) continue;
+        const fCount = Math.max(1, Number(tm.family_count) || 1);
+        await sql`
+          INSERT INTO trip_members (trip_id, user_id, family_count)
+          VALUES (${tm.trip_id}::uuid, ${memberNeonId}::uuid, ${fCount})
+          ON CONFLICT (trip_id, user_id) DO NOTHING
+        `;
+      }
+
+      for (const exp of bundled.expenses) {
+        const payerNeonId = localIdToNeonId.get(exp.paid_by);
+        if (!payerNeonId) continue;
+        await sql`
+          INSERT INTO expenses (id, trip_id, paid_by, amount, description, expense_date, created_at)
+          VALUES (
+            ${exp.id}::uuid,
+            ${exp.trip_id}::uuid,
+            ${payerNeonId}::uuid,
+            ${exp.amount},
+            ${exp.description},
+            ${exp.expense_date}::date,
+            ${exp.created_at}::timestamptz
+          )
+          ON CONFLICT (id) DO NOTHING
+        `;
+      }
+    }
+  } catch (seedErr) {
+    console.warn("Initial Neon seed skipped:", seedErr);
+  }
 
   neonInitialized = true;
   return sql;

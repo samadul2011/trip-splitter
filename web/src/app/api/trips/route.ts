@@ -3,6 +3,8 @@ import { z } from "zod";
 import { isAdminProfile, requireAuth } from "@/lib/auth";
 import { dbCreateTrip, dbGetTripsForUser } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 const createTripSchema = z.object({
   name: z.string().trim().min(1, "Trip name is required"),
   member_ids: z.array(z.string().uuid()).optional().default([]),

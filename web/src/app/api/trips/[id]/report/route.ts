@@ -10,6 +10,8 @@ import {
 } from "@/lib/db";
 import { calculateTripSettlement } from "@/lib/settlement";
 
+export const dynamic = "force-dynamic";
+
 const updateSettlementSchema = z.object({
   from_user: z.string().trim().min(1),
   to_user: z.string().trim().min(1),
