@@ -118,6 +118,15 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(24), dp(48), dp(24), dp(32))
         }
 
+        val logoView = ImageView(this).apply {
+            setImageResource(R.drawable.ic_tripsplit_logo)
+            layoutParams = LinearLayout.LayoutParams(dp(72), dp(72)).apply {
+                bottomMargin = dp(12)
+            }
+            background = cardBg("#059669", "#A7F3D0", 20)
+            clipToOutline = true
+        }
+
         val title = TextView(this).apply {
             text = "TripSplit"
             textSize = 28f
@@ -259,6 +268,7 @@ class MainActivity : AppCompatActivity() {
         card.addView(loginBtn, btnParams)
         card.addView(infoNote)
 
+        layout.addView(logoView)
         layout.addView(title)
         layout.addView(subtitle)
         layout.addView(card)
@@ -286,6 +296,15 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, 0, 0, dp(16))
+        }
+
+        val headerLogo = ImageView(this).apply {
+            setImageResource(R.drawable.ic_tripsplit_logo)
+            layoutParams = LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                rightMargin = dp(12)
+            }
+            background = cardBg("#059669", "#A7F3D0", 12)
+            clipToOutline = true
         }
 
         val titleCol = LinearLayout(this).apply {
@@ -322,6 +341,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        topBar.addView(headerLogo)
         topBar.addView(titleCol)
         topBar.addView(logoutBtn)
         mainLayout.addView(topBar)
