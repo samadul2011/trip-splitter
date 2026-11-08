@@ -12,7 +12,8 @@ import java.net.URLEncoder
 data class UserProfile(
     val id: String,
     val fullName: String,
-    val isAdmin: Boolean
+    val isAdmin: Boolean,
+    val familyCount: Int = 1
 )
 
 data class TripItem(
@@ -20,6 +21,7 @@ data class TripItem(
     val name: String,
     val isCompleted: Boolean,
     val memberCount: Int,
+    val totalPersons: Int = 1,
     val totalSpent: Double,
     val createdAt: String,
     val members: List<UserProfile> = emptyList()
@@ -36,8 +38,11 @@ data class ExpenseItem(
 )
 
 data class UserTotalItem(
+    val userId: String,
     val userName: String,
+    val familyCount: Int,
     val totalSpent: Double,
+    val shouldPay: Double,
     val difference: Double
 )
 
@@ -54,6 +59,7 @@ data class TripReportData(
     val totalSpent: Double,
     val perPersonShare: Double,
     val memberCount: Int,
+    val totalPersons: Int,
     val userTotals: List<UserTotalItem>,
     val expenses: List<ExpenseItem>,
     val settlements: List<SettlementItem>
@@ -195,7 +201,8 @@ object ApiClient {
                 UserProfile(
                     id = m.getString("id"),
                     fullName = mName,
-                    isAdmin = mName.equals("Samadul", ignoreCase = true)
+                    isAdmin = mName.equals("Samadul", ignoreCase = true),
+                    familyCount = m.optInt("family_count", 1)
                 )
             )
         }
@@ -204,10 +211,24 @@ object ApiClient {
             name = t.getString("name"),
             isCompleted = t.optBoolean("is_completed", false),
             memberCount = t.optInt("member_count", members.size),
+            totalPersons = t.optInt("total_persons", members.sumOf { it.familyCount }),
             totalSpent = 0.0,
             createdAt = t.optString("created_at", ""),
             members = members
         )
+    }
+
+    fun updateMemberFamilyCount(
+        baseUrl: String,
+        token: String,
+        tripId: String,
+        memberUserId: String,
+        familyCount: Int
+    ) {
+        val body = JSONObject()
+            .put("member_user_id", memberUserId)
+            .put("family_count", familyCount)
+        request(baseUrl, "/api/trips/$tripId", "PATCH", token, body)
     }
 
     fun updateTripStatus(baseUrl: String, token: String, tripId: String, isCompleted: Boolean) {
@@ -286,12 +307,17 @@ object ApiClient {
         val share = res.optDouble("per_person_share", 0.0)
         for (i in 0 until utArr.length()) {
             val u = utArr.getJSONObject(i)
+            val fCount = u.optInt("family_count", 1)
             val spent = u.optDouble("total_spent", 0.0)
-            val diff = if (u.has("difference")) u.optDouble("difference", 0.0) else (spent - share)
+            val shouldPay = u.optDouble("should_pay", share * fCount)
+            val diff = if (u.has("difference")) u.optDouble("difference", 0.0) else (spent - shouldPay)
             userTotals.add(
                 UserTotalItem(
+                    userId = u.optString("user_id", ""),
                     userName = u.optString("user_name", "Unknown"),
+                    familyCount = fCount,
                     totalSpent = spent,
+                    shouldPay = shouldPay,
                     difference = diff
                 )
             )
@@ -334,6 +360,7 @@ object ApiClient {
             totalSpent = res.optDouble("total_spent", 0.0),
             perPersonShare = share,
             memberCount = res.optInt("member_count", 1),
+            totalPersons = res.optInt("total_persons", res.optInt("member_count", 1)),
             userTotals = userTotals,
             expenses = expenses,
             settlements = settlements

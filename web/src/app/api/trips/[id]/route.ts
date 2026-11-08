@@ -4,17 +4,20 @@ import { isAdminProfile, requireAuth } from "@/lib/auth";
 import {
   dbGetTripById,
   dbIsTripMember,
+  dbUpdateTripMemberFamilyCount,
   dbUpdateTripStatus,
 } from "@/lib/db";
 
 const updateTripSchema = z.object({
   is_completed: z.boolean().optional(),
   name: z.string().trim().min(1).optional(),
+  member_user_id: z.string().uuid().optional(),
+  family_count: z.coerce.number().int().min(1).max(50).optional(),
 });
 
 /**
  * GET /api/trips/{id}
- * Returns trip details and members if the user is a member of the trip.
+ * Returns trip details and members (including each member's `family_count`).
  */
 export async function GET(
   req: NextRequest,
@@ -42,8 +45,9 @@ export async function GET(
 
 /**
  * PATCH /api/trips/{id}
- * Body: { is_completed: true }
- * Only Admin ("Samadul") can close (complete) or reopen a trip.
+ * Body:
+ *   - { is_completed: true | false } -> Close or reopen trip (Admin only)
+ *   - { member_user_id: "uuid", family_count: 2 } -> Update a member's family count (1, 2, 3, 4...) (Admin only)
  */
 export async function PATCH(
   req: NextRequest,
@@ -55,7 +59,10 @@ export async function PATCH(
 
     if (!isAdminProfile(context.profile)) {
       return NextResponse.json(
-        { error: "Only Admin (Samadul) can close or reopen a trip." },
+        {
+          error:
+            "Only Admin (Samadul) can update trip status or member family count.",
+        },
         { status: 403 }
       );
     }
@@ -71,6 +78,16 @@ export async function PATCH(
       );
     }
 
+    if (parsed.data.member_user_id && parsed.data.family_count !== undefined) {
+      await dbUpdateTripMemberFamilyCount({
+        tripId,
+        userId: parsed.data.member_user_id,
+        familyCount: parsed.data.family_count,
+      });
+      const updatedTrip = await dbGetTripById(tripId);
+      return NextResponse.json({ trip: updatedTrip });
+    }
+
     const updated = await dbUpdateTripStatus(
       tripId,
       parsed.data.is_completed ?? true
@@ -82,7 +99,8 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json({ trip: updated });
+    const fullTrip = await dbGetTripById(tripId);
+    return NextResponse.json({ trip: fullTrip || updated });
   } catch (err) {
     console.error("PATCH /api/trips/[id] error:", err);
     return NextResponse.json(

@@ -6,6 +6,7 @@ import { dbCreateTrip, dbGetTripsForUser } from "@/lib/db";
 const createTripSchema = z.object({
   name: z.string().trim().min(1, "Trip name is required"),
   member_ids: z.array(z.string().uuid()).optional().default([]),
+  member_counts: z.record(z.string(), z.coerce.number().int().min(1)).optional().default({}),
 });
 
 /**
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/trips
- * Body: { name, member_ids: [] }
+ * Body: { name, member_ids: [], member_counts?: { [userId]: 1 | 2 | 3 | 4 } }
  * Only Admin ("Samadul") can create a new trip.
  */
 export async function POST(req: NextRequest) {
@@ -54,8 +55,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { name, member_ids } = parsed.data;
-    const trip = await dbCreateTrip(name, context.profile.id, member_ids);
+    const { name, member_ids, member_counts } = parsed.data;
+    const trip = await dbCreateTrip(
+      name,
+      context.profile.id,
+      member_ids,
+      member_counts
+    );
 
     return NextResponse.json({ trip }, { status: 201 });
   } catch (err) {

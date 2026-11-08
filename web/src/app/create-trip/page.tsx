@@ -16,6 +16,8 @@ import {
   MapPin,
   Users,
   ShieldAlert,
+  Minus,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Navbar } from "@/components/Navbar";
@@ -43,6 +45,7 @@ export default function CreateTripPage() {
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
   const [searching, setSearching] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<Profile[]>([]);
+  const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
 
   const {
     register,
@@ -78,6 +81,14 @@ export default function CreateTripPage() {
     return () => clearTimeout(timer);
   }, [searchQuery, fetchUsers]);
 
+  const adjustFamilyCount = (userId: string, delta: number) => {
+    setMemberCounts((prev) => {
+      const current = prev[userId] || 1;
+      const next = Math.max(1, Math.min(30, current + delta));
+      return { ...prev, [userId]: next };
+    });
+  };
+
   const toggleMember = (candidate: Profile) => {
     if (user && candidate.id === user.id) return;
     setSelectedMembers((prev) => {
@@ -94,14 +105,27 @@ export default function CreateTripPage() {
     setSelectedMembers(others);
   };
 
+  const totalHeadcount =
+    (user ? memberCounts[user.id] || 1 : 1) +
+    selectedMembers.reduce((sum, m) => sum + (memberCounts[m.id] || 1), 0);
+
   const onSubmit = async (values: CreateTripFormValues) => {
     try {
       const memberIds = selectedMembers.map((m) => m.id);
+      const countsPayload: Record<string, number> = {};
+      if (user) {
+        countsPayload[user.id] = memberCounts[user.id] || 1;
+      }
+      for (const m of selectedMembers) {
+        countsPayload[m.id] = memberCounts[m.id] || 1;
+      }
+
       const res = await apiFetch("/api/trips", {
         method: "POST",
         body: JSON.stringify({
           name: values.name,
           member_ids: memberIds,
+          member_counts: countsPayload,
         }),
       });
 
@@ -152,7 +176,7 @@ export default function CreateTripPage() {
                   Create New Trip (Admin)
                 </h1>
                 <p className="text-xs text-slate-500">
-                  Name your trip and select members traveling together
+                  Select members and set family member count (1, 2, 3, 4...) for each user
                 </p>
               </div>
             </div>
@@ -184,12 +208,21 @@ export default function CreateTripPage() {
                 )}
               </div>
 
-              {/* Selected Members Chips */}
+              {/* Selected Members & Family Count */}
               <div>
-                <div className="flex items-center justify-between">
-                  <label className="block text-sm font-semibold text-slate-700">
-                    Trip Members ({selectedMembers.length + 1})
-                  </label>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700">
+                      Trip Members ({selectedMembers.length + 1} accounts &bull;{" "}
+                      <span className="text-emerald-700">
+                        {totalHeadcount} total persons
+                      </span>
+                      )
+                    </label>
+                    <p className="text-xs text-slate-500">
+                      Use <strong>- / +</strong> to set how many family members (1, 2, 3, 4...) are with each person
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={selectAllMembers}
@@ -199,27 +232,88 @@ export default function CreateTripPage() {
                   </button>
                 </div>
 
-                <div className="mt-2 flex flex-wrap gap-2 rounded-xl border border-slate-200/80 bg-slate-50/50 p-3">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-900">
-                    <Users className="h-3.5 w-3.5 text-emerald-700" />
-                    <span>{user?.full_name || "Samadul"} (Admin)</span>
-                  </span>
+                <div className="mt-2.5 space-y-2 rounded-xl border border-slate-200/80 bg-slate-50/50 p-3">
+                  {/* Admin Row */}
+                  {user && (
+                    <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50/60 px-3.5 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-emerald-700" />
+                        <span className="text-sm font-bold text-emerald-950">
+                          {user.full_name} (Admin)
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-600">
+                          Family members:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => adjustFamilyCount(user.id, -1)}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                        >
+                          <Minus className="h-3.5 w-3.5" />
+                        </button>
+                        <span className="min-w-[28px] text-center text-sm font-extrabold text-emerald-800">
+                          {memberCounts[user.id] || 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => adjustFamilyCount(user.id, 1)}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-                  {selectedMembers.map((member) => (
-                    <span
-                      key={member.id}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-900"
-                    >
-                      <span>{member.full_name}</span>
-                      <button
-                        type="button"
-                        onClick={() => toggleMember(member)}
-                        className="rounded-full p-0.5 text-sky-700 hover:bg-sky-200"
+                  {/* Other Selected Members */}
+                  {selectedMembers.map((member) => {
+                    const count = memberCounts[member.id] || 1;
+                    return (
+                      <div
+                        key={member.id}
+                        className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3.5 py-2.5"
                       >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-slate-900">
+                            {member.full_name}
+                          </span>
+                          <span className="rounded-md bg-sky-100 px-2 py-0.5 text-[11px] font-bold text-sky-800">
+                            {count} {count === 1 ? "person" : "persons"} ({count}x share)
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => adjustFamilyCount(member.id, -1)}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="min-w-[24px] text-center text-sm font-extrabold text-slate-900">
+                            {count}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => adjustFamilyCount(member.id, 1)}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleMember(member)}
+                            title="Remove from trip"
+                            className="ml-1 rounded-lg p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -312,7 +406,7 @@ export default function CreateTripPage() {
                     <span>Creating Trip...</span>
                   </>
                 ) : (
-                  <span>Create Trip</span>
+                  <span>Create Trip ({totalHeadcount} Total Persons)</span>
                 )}
               </button>
             </form>

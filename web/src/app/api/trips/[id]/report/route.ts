@@ -28,7 +28,7 @@ export async function GET(
 
   const tripId = params.id;
   const isMember = await dbIsTripMember(tripId, context.profile.id);
-  if (!isMember) {
+  if (!isMember && !isAdminProfile(context.profile)) {
     return NextResponse.json(
       { error: "Forbidden: You are not a member of this trip" },
       { status: 403 }
@@ -45,11 +45,12 @@ export async function GET(
     dbGetSettlementStatuses(tripId),
   ]);
 
-  const members: { id: string; full_name: string }[] = (
+  const members: { id: string; full_name: string; family_count: number }[] = (
     trip.members || []
   ).map((m) => ({
     id: m.id,
     full_name: m.full_name,
+    family_count: Math.max(1, Number(m.family_count) || 1),
   }));
 
   const memberIdsSet = new Set(members.map((m) => m.id));
@@ -59,6 +60,7 @@ export async function GET(
       members.push({
         id: exp.paid_by,
         full_name: exp.user_name || "Unknown",
+        family_count: 1,
       });
     }
   }
@@ -100,6 +102,7 @@ export async function GET(
     total_spent: settlementResult.total_spent,
     per_person_share: settlementResult.per_person_share,
     member_count: settlementResult.member_count,
+    total_persons: settlementResult.total_persons,
     user_totals: settlementResult.user_totals,
     expenses: expensesFormatted,
     settlement: settlementWithStatus,
@@ -108,8 +111,6 @@ export async function GET(
 
 /**
  * PATCH /api/trips/{id}/report
- * Body: { from_user, to_user, is_paid }
- * Marks a settlement item in "Settlement Plan (Who Owes Whom)" as Paid or Unpaid.
  */
 export async function PATCH(
   req: NextRequest,

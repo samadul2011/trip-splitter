@@ -28,6 +28,8 @@ import {
   X,
   UserCheck,
   ShieldCheck,
+  Minus,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Navbar } from "@/components/Navbar";
@@ -78,6 +80,7 @@ export default function TripDetailPage() {
   const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(
     null
   );
+  const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
 
   // Admin Edit Expense state
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -173,6 +176,40 @@ export default function TripDetailPage() {
       loadReport();
     }
   }, [activeTab, tripId, loadReport]);
+
+  const handleUpdateFamilyCount = async (
+    memberId: string,
+    memberName: string,
+    nextCount: number
+  ) => {
+    if (!isAdmin || nextCount < 1) return;
+    setUpdatingMemberId(memberId);
+    try {
+      const res = await apiFetch(`/api/trips/${tripId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          member_user_id: memberId,
+          family_count: nextCount,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Failed to update member count");
+        return;
+      }
+      if (data.trip) {
+        setTrip(data.trip);
+      }
+      toast.success(
+        `${memberName}'s member count set to ${nextCount} (${nextCount}x share)`
+      );
+      loadReport();
+    } catch {
+      toast.error("Network error updating member count");
+    } finally {
+      setUpdatingMemberId(null);
+    }
+  };
 
   const onAddExpense = async (values: ExpenseFormValues) => {
     try {
@@ -390,6 +427,15 @@ export default function TripDetailPage() {
     (s) => s.is_paid
   ).length;
 
+  const totalPersonsCount =
+    trip?.total_persons ||
+    (trip?.members || []).reduce(
+      (sum, m) => sum + Math.max(1, Number(m.family_count) || 1),
+      0
+    ) ||
+    trip?.member_count ||
+    1;
+
   return (
     <div className="min-h-screen pb-16">
       <Navbar />
@@ -452,25 +498,11 @@ export default function TripDetailPage() {
                         Active Trip
                       </span>
                     )}
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+                      {trip.members?.length || 1} Accounts &bull;{" "}
+                      {totalPersonsCount} Total Persons
+                    </span>
                   </div>
-
-                  {/* Members List */}
-                  {trip.members && trip.members.length > 0 && (
-                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                      <span className="mr-1 inline-flex items-center gap-1 text-xs font-medium text-slate-500">
-                        <Users className="h-3.5 w-3.5" />
-                        Members ({trip.members.length}):
-                      </span>
-                      {trip.members.map((m) => (
-                        <span
-                          key={m.id}
-                          className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700"
-                        >
-                          {m.full_name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </div>
 
                 {/* Admin-Only: Close Trip / Reopen Trip Button */}
@@ -509,8 +541,84 @@ export default function TripDetailPage() {
                 )}
               </div>
 
+              {/* Members & Family Count Bar */}
+              {trip.members && trip.members.length > 0 && (
+                <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                      <Users className="h-3.5 w-3.5 text-emerald-600" />
+                      Trip Members & Family Count (Share Multiplier):
+                    </span>
+                    {isAdmin && (
+                      <span className="text-[11px] font-medium text-emerald-700 print:hidden">
+                        Admin: Click - / + to set family members (1, 2, 3, 4...)
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-2.5 flex flex-wrap gap-2">
+                    {trip.members.map((m) => {
+                      const fCount = Math.max(1, Number(m.family_count) || 1);
+                      const isUpdating = updatingMemberId === m.id;
+                      return (
+                        <div
+                          key={m.id}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs shadow-2xs"
+                        >
+                          <span className="font-bold text-slate-800">
+                            {m.full_name}
+                          </span>
+                          <span
+                            className={`rounded-md px-1.5 py-0.5 text-[11px] font-extrabold ${
+                              fCount > 1
+                                ? "bg-sky-100 text-sky-800"
+                                : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {fCount} {fCount === 1 ? "member" : "members"}
+                          </span>
+
+                          {isAdmin && (
+                            <div className="ml-1 inline-flex items-center gap-1 print:hidden">
+                              <button
+                                type="button"
+                                disabled={isUpdating || fCount <= 1}
+                                onClick={() =>
+                                  handleUpdateFamilyCount(
+                                    m.id,
+                                    m.full_name,
+                                    fCount - 1
+                                  )
+                                }
+                                className="flex h-5 w-5 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isUpdating}
+                                onClick={() =>
+                                  handleUpdateFamilyCount(
+                                    m.id,
+                                    m.full_name,
+                                    fCount + 1
+                                  )
+                                }
+                                className="flex h-5 w-5 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Navigation Tabs */}
-              <div className="mt-6 flex gap-2 border-t border-slate-100 pt-4 print:hidden">
+              <div className="mt-5 flex gap-2 border-t border-slate-100 pt-4 print:hidden">
                 <button
                   type="button"
                   onClick={() => setActiveTab("expenses")}
@@ -646,8 +754,7 @@ export default function TripDetailPage() {
             {/* TAB 1: ADD EXPENSE & EXPENSE LIST */}
             {activeTab === "expenses" && (
               <div className="mt-6 space-y-6">
-                {/* Add Expense Form */}
-                {(!trip.is_completed || isAdmin) ? (
+                {!trip.is_completed || isAdmin ? (
                   <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
                     <div className="flex items-center justify-between">
                       <div>
@@ -675,7 +782,6 @@ export default function TripDetailPage() {
                       className="mt-4 grid gap-4 sm:grid-cols-12"
                       noValidate
                     >
-                      {/* Admin can choose Who Spent; regular user sees their own name */}
                       {isAdmin && (
                         <div className="sm:col-span-3">
                           <label
@@ -704,8 +810,9 @@ export default function TripDetailPage() {
                         </div>
                       )}
 
-                      {/* Amount Input */}
-                      <div className={isAdmin ? "sm:col-span-2" : "sm:col-span-3"}>
+                      <div
+                        className={isAdmin ? "sm:col-span-2" : "sm:col-span-3"}
+                      >
                         <label
                           htmlFor="amount"
                           className="block text-xs font-semibold text-slate-700"
@@ -733,8 +840,9 @@ export default function TripDetailPage() {
                         )}
                       </div>
 
-                      {/* Description Input */}
-                      <div className={isAdmin ? "sm:col-span-4" : "sm:col-span-5"}>
+                      <div
+                        className={isAdmin ? "sm:col-span-4" : "sm:col-span-5"}
+                      >
                         <label
                           htmlFor="description"
                           className="block text-xs font-semibold text-slate-700"
@@ -760,8 +868,9 @@ export default function TripDetailPage() {
                         )}
                       </div>
 
-                      {/* Date Picker */}
-                      <div className={isAdmin ? "sm:col-span-3" : "sm:col-span-4"}>
+                      <div
+                        className={isAdmin ? "sm:col-span-3" : "sm:col-span-4"}
+                      >
                         <label
                           htmlFor="expense_date"
                           className="block text-xs font-semibold text-slate-700"
@@ -809,7 +918,8 @@ export default function TripDetailPage() {
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm text-emerald-900">
-                    This trip has been closed by Admin (<strong>Samadul</strong>). View the{" "}
+                    This trip has been closed by Admin (<strong>Samadul</strong>
+                    ). View the{" "}
                     <button
                       type="button"
                       onClick={() => setActiveTab("report")}
@@ -843,15 +953,17 @@ export default function TripDetailPage() {
                         Total Trip Spending
                       </span>
                       <span className="text-base font-extrabold text-emerald-900">
-                        {formatTaka(totalSpentSoFar, { bengali: bengaliNumbers })}
+                        {formatTaka(totalSpentSoFar, {
+                          bengali: bengaliNumbers,
+                        })}
                       </span>
                     </div>
                   </div>
 
                   {expenses.length === 0 ? (
                     <div className="mt-6 rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-500">
-                      No expenses added yet. Use the form above to log your first
-                      expense!
+                      No expenses added yet. Use the form above to log your
+                      first expense!
                     </div>
                   ) : (
                     <div className="mt-4 overflow-x-auto">
@@ -875,7 +987,9 @@ export default function TripDetailPage() {
                               <td className="py-3.5 pr-3 font-semibold text-slate-900">
                                 <span className="inline-flex items-center gap-2">
                                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">
-                                    {(exp.user_name || "U").charAt(0).toUpperCase()}
+                                    {(exp.user_name || "U")
+                                      .charAt(0)
+                                      .toUpperCase()}
                                   </span>
                                   {exp.user_name}
                                 </span>
@@ -905,7 +1019,9 @@ export default function TripDetailPage() {
                                     <button
                                       type="button"
                                       disabled={deletingExpenseId === exp.id}
-                                      onClick={() => handleDeleteExpense(exp.id)}
+                                      onClick={() =>
+                                        handleDeleteExpense(exp.id)
+                                      }
                                       title="Delete wrong entry"
                                       className="inline-flex items-center justify-center rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                                     >
@@ -935,7 +1051,7 @@ export default function TripDetailPage() {
                   <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white py-16">
                     <Loader2 className="h-8 w-8 animate-spin text-sky-600" />
                     <p className="mt-3 text-sm font-medium text-slate-600">
-                      Calculating equal split & settlement report...
+                      Calculating family shares & settlement report...
                     </p>
                   </div>
                 ) : (
@@ -947,7 +1063,9 @@ export default function TripDetailPage() {
                           Shared Trip Report — {report.trip_name}
                         </h2>
                         <p className="text-xs text-slate-500">
-                          Everyone in this trip sees this live summary of all expenses, shares, and settlements
+                          Calculated by each user&apos;s family member count (
+                          {report.total_persons || report.member_count} total
+                          persons across {report.member_count} accounts)
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -958,7 +1076,9 @@ export default function TripDetailPage() {
                         >
                           <PlusCircle className="h-3.5 w-3.5" />
                           <span>
-                            {isAdmin ? "Add / Edit Expenses" : "View / Add Expenses"}
+                            {isAdmin
+                              ? "Add / Edit Expenses"
+                              : "View / Add Expenses"}
                           </span>
                         </button>
                         <button
@@ -994,7 +1114,7 @@ export default function TripDetailPage() {
 
                       <div className="rounded-2xl bg-gradient-to-br from-sky-600 to-blue-700 p-5 text-white shadow-md">
                         <p className="text-xs font-semibold uppercase tracking-wider text-sky-100">
-                          Per Person Share (Equal Split)
+                          1 Person Share (Unit Cost)
                         </p>
                         <p className="mt-2 text-3xl font-extrabold">
                           {formatTaka(report.per_person_share, {
@@ -1002,11 +1122,13 @@ export default function TripDetailPage() {
                           })}
                         </p>
                         <p className="mt-1 text-xs text-sky-100">
-                          Split equally among{" "}
+                          Divided across{" "}
                           {bengaliNumbers
-                            ? toBengaliDigits(report.member_count)
-                            : report.member_count}{" "}
-                          members
+                            ? toBengaliDigits(
+                                report.total_persons || report.member_count
+                              )
+                            : report.total_persons || report.member_count}{" "}
+                          total persons ({report.member_count} accounts)
                         </p>
                       </div>
 
@@ -1016,9 +1138,9 @@ export default function TripDetailPage() {
                         </p>
                         <p className="mt-2 text-3xl font-extrabold text-slate-900">
                           {bengaliNumbers
-                            ? `${toBengaliDigits(paidSettlementCount)} / ${toBengaliDigits(
-                                report.settlement.length
-                              )}`
+                            ? `${toBengaliDigits(
+                                paidSettlementCount
+                              )} / ${toBengaliDigits(report.settlement.length)}`
                             : `${paidSettlementCount} / ${report.settlement.length}`}{" "}
                           <span className="text-base font-semibold text-emerald-600">
                             Paid
@@ -1043,11 +1165,11 @@ export default function TripDetailPage() {
                             </h2>
                           </div>
                           <p className="mt-1 text-xs text-slate-600">
-                            Exact payments required so every member pays the equal share (
+                            Automatically accounts for each member&apos;s family count (1x, 2x, 3x, 4x share of{" "}
                             {formatTaka(report.per_person_share, {
                               bengali: bengaliNumbers,
                             })}
-                            ).
+                            )
                           </p>
                         </div>
                       </div>
@@ -1107,7 +1229,9 @@ export default function TripDetailPage() {
                                   >
                                     {bengaliNumbers
                                       ? `${toBengaliDigits(item.amount)} টাকা`
-                                      : `${item.amount.toLocaleString("en-IN")} Taka`}
+                                      : `${item.amount.toLocaleString(
+                                          "en-IN"
+                                        )} Taka`}
                                   </span>
 
                                   {isAdmin ? (
@@ -1153,25 +1277,32 @@ export default function TripDetailPage() {
                       )}
                     </div>
 
-                    {/* Member Breakdown Table */}
+                    {/* Member Breakdown Table: Member Name | Family Members | Total Spent | Should Pay | Status / Difference (+/-) */}
                     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                       <h2 className="text-base font-bold text-slate-900">
-                        Member-Wise Spending Summary
+                        Member-Wise Spending & Family Share Summary
                       </h2>
                       <p className="text-xs text-slate-500">
-                        Green (+) = Gets money back &bull; Red (-) = Owes money
+                        <strong>Should Pay</strong> = Family Members &times;{" "}
+                        {formatTaka(report.per_person_share, {
+                          bengali: bengaliNumbers,
+                        })}{" "}
+                        (1 Person Share)
                       </p>
 
                       <div className="mt-4 overflow-x-auto">
-                        <table className="w-full min-w-[480px] border-collapse text-left text-sm">
+                        <table className="w-full min-w-[560px] border-collapse text-left text-sm">
                           <thead>
                             <tr className="border-b border-slate-200 text-xs font-semibold uppercase tracking-wider text-slate-500">
                               <th className="py-3 pr-3">Member Name</th>
+                              <th className="px-3 py-3 text-center">
+                                Family Members
+                              </th>
                               <th className="px-3 py-3 text-right">
                                 Total Spent
                               </th>
                               <th className="px-3 py-3 text-right">
-                                Equal Share
+                                Should Pay (Share)
                               </th>
                               <th className="py-3 pl-3 text-right">
                                 Status / Difference (+/-)
@@ -1180,10 +1311,18 @@ export default function TripDetailPage() {
                           </thead>
                           <tbody className="divide-y divide-slate-100">
                             {report.user_totals.map((ut) => {
+                              const fCount = Math.max(
+                                1,
+                                Number(ut.family_count) || 1
+                              );
+                              const shouldPay =
+                                ut.should_pay !== undefined
+                                  ? ut.should_pay
+                                  : report.per_person_share * fCount;
                               const diff =
                                 ut.difference !== undefined
                                   ? ut.difference
-                                  : ut.total_spent - report.per_person_share;
+                                  : ut.total_spent - shouldPay;
                               const isPositive = diff > 0.005;
                               const isNegative = diff < -0.005;
 
@@ -1200,13 +1339,66 @@ export default function TripDetailPage() {
                                       {ut.user_name}
                                     </span>
                                   </td>
+                                  <td className="px-3 py-3.5 text-center">
+                                    <div className="inline-flex items-center gap-1.5">
+                                      {isAdmin && ut.user_id && (
+                                        <button
+                                          type="button"
+                                          disabled={
+                                            updatingMemberId === ut.user_id ||
+                                            fCount <= 1
+                                          }
+                                          onClick={() =>
+                                            handleUpdateFamilyCount(
+                                              ut.user_id!,
+                                              ut.user_name,
+                                              fCount - 1
+                                            )
+                                          }
+                                          className="flex h-5 w-5 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 disabled:opacity-40 print:hidden"
+                                        >
+                                          <Minus className="h-3 w-3" />
+                                        </button>
+                                      )}
+                                      <span
+                                        className={`rounded-md px-2 py-0.5 text-xs font-extrabold ${
+                                          fCount > 1
+                                            ? "bg-sky-100 text-sky-800"
+                                            : "bg-slate-100 text-slate-700"
+                                        }`}
+                                      >
+                                        {bengaliNumbers
+                                          ? toBengaliDigits(fCount)
+                                          : fCount}{" "}
+                                        ({fCount}x)
+                                      </span>
+                                      {isAdmin && ut.user_id && (
+                                        <button
+                                          type="button"
+                                          disabled={
+                                            updatingMemberId === ut.user_id
+                                          }
+                                          onClick={() =>
+                                            handleUpdateFamilyCount(
+                                              ut.user_id!,
+                                              ut.user_name,
+                                              fCount + 1
+                                            )
+                                          }
+                                          className="flex h-5 w-5 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 disabled:opacity-40 print:hidden"
+                                        >
+                                          <Plus className="h-3 w-3" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
                                   <td className="px-3 py-3.5 text-right font-bold text-slate-900">
                                     {formatTaka(ut.total_spent, {
                                       bengali: bengaliNumbers,
                                     })}
                                   </td>
-                                  <td className="px-3 py-3.5 text-right text-slate-600">
-                                    {formatTaka(report.per_person_share, {
+                                  <td className="px-3 py-3.5 text-right font-bold text-sky-700">
+                                    {formatTaka(shouldPay, {
                                       bengali: bengaliNumbers,
                                     })}
                                   </td>

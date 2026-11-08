@@ -1012,7 +1012,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(Color.WHITE)
         }
         val shareText = TextView(this).apply {
-            text = "Equal Per-Person Share: ${formatTaka(report.perPersonShare)} (${report.memberCount} members)"
+            text = "1 Person Share: ${formatTaka(report.perPersonShare)} (${report.totalPersons} total persons across ${report.memberCount} accounts)"
             textSize = 14f
             setTextColor(Color.parseColor("#D1FAE5"))
             setPadding(0, dp(4), 0, 0)
@@ -1141,10 +1141,11 @@ class MainActivity : AppCompatActivity() {
         report.userTotals.forEach { ut ->
             val uRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
-                setPadding(0, dp(6), 0, dp(6))
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(8), 0, dp(8))
             }
             val uName = TextView(this).apply {
-                text = "${ut.userName}\nSpent: ${formatTaka(ut.totalSpent)}"
+                text = "${ut.userName} (${ut.familyCount}x member)\nSpent: ${formatTaka(ut.totalSpent)}  •  Should Pay: ${formatTaka(ut.shouldPay)}"
                 textSize = 13f
                 setTextColor(Color.parseColor("#1E293B"))
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -1170,6 +1171,41 @@ class MainActivity : AppCompatActivity() {
             }
             uRow.addView(uName)
             uRow.addView(diffTag)
+
+            if (isAdmin && ut.userId.isNotBlank()) {
+                val plusBtn = Button(this).apply {
+                    text = "${ut.familyCount}p ±"
+                    isAllCaps = false
+                    textSize = 11f
+                    setOnClickListener {
+                        val numInput = EditText(this@MainActivity).apply {
+                            setText(ut.familyCount.toString())
+                            inputType = InputType.TYPE_CLASS_NUMBER
+                        }
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("Family Members for ${ut.userName}")
+                            .setMessage("Enter how many family members (1, 2, 3, 4...) are with ${ut.userName}:")
+                            .setView(numInput)
+                            .setPositiveButton("Update") { _, _ ->
+                                val nextCount = numInput.text.toString().toIntOrNull() ?: 1
+                                executor.execute {
+                                    try {
+                                        ApiClient.updateMemberFamilyCount(baseUrl, token, trip.id, ut.userId, nextCount)
+                                        runOnUiThread { showTripDetailScreen(trip.id) }
+                                    } catch (e: Exception) {
+                                        runOnUiThread {
+                                            Toast.makeText(this@MainActivity, e.message, Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            }
+                            .setNegativeButton("Cancel", null)
+                            .show()
+                    }
+                }
+                uRow.addView(plusBtn)
+            }
+
             memberCard.addView(uRow)
         }
 
