@@ -383,5 +383,25 @@ object ApiClient {
             .put("is_paid", isPaid)
         request(baseUrl, "/api/trips/$tripId/report", "PATCH", token, body)
     }
+
+    fun createUser(baseUrl: String, token: String, fullName: String, password: String = "123456"): UserProfile {
+        val body = JSONObject()
+            .put("full_name", fullName)
+            .put("password", password)
+        val res = request(baseUrl, "/api/users", "POST", token, body)
+        val userObj = res.getJSONObject("user")
+        return UserProfile(
+            id = userObj.getString("id"),
+            fullName = userObj.getString("full_name"),
+            isAdmin = false
+        )
+    }
+
+    fun addMemberToTrip(baseUrl: String, token: String, tripId: String, userId: String, familyCount: Int = 1) {
+        val body = JSONObject()
+            .put("member_user_id", userId)
+            .put("family_count", familyCount)
+        request(baseUrl, "/api/trips/$tripId", "PATCH", token, body)
+    }
 }
 

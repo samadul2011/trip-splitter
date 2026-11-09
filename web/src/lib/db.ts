@@ -425,6 +425,58 @@ export async function dbSearchUsers(query: string): Promise<Profile[]> {
     .sort((a, b) => a.full_name.localeCompare(b.full_name));
 }
 
+export async function dbCreateUser(
+  fullName: string,
+  plainPassword?: string
+): Promise<Profile> {
+  const cleanName = fullName.trim();
+  const password = plainPassword?.trim() || "123456";
+
+  if (isNeonConfigured()) {
+    const sql = await getNeonSql();
+    const rows = await sql`
+      INSERT INTO profiles (full_name, password_hash)
+      VALUES (${cleanName}, ${password})
+      ON CONFLICT (full_name) DO UPDATE
+        SET password_hash = EXCLUDED.password_hash
+      RETURNING id, full_name, created_at
+    `;
+    return {
+      id: String(rows[0].id),
+      full_name: String(rows[0].full_name),
+      created_at: String(rows[0].created_at),
+    };
+  }
+
+  const db = readLocalDb();
+  let existing = db.profiles.find(
+    (p) => p.full_name.toLowerCase() === cleanName.toLowerCase()
+  );
+  if (existing) {
+    existing.password_hash = password;
+    writeLocalDb(db);
+    return {
+      id: existing.id,
+      full_name: existing.full_name,
+      created_at: existing.created_at,
+    };
+  }
+
+  const newUser: StoredUser = {
+    id: crypto.randomUUID(),
+    full_name: cleanName,
+    password_hash: password,
+    created_at: new Date().toISOString(),
+  };
+  db.profiles.push(newUser);
+  writeLocalDb(db);
+  return {
+    id: newUser.id,
+    full_name: newUser.full_name,
+    created_at: newUser.created_at,
+  };
+}
+
 export async function dbGetTripsForUser(userId: string): Promise<Trip[]> {
   if (isNeonConfigured()) {
     const sql = await getNeonSql();

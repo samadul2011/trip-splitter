@@ -47,6 +47,12 @@ export default function CreateTripPage() {
   const [selectedMembers, setSelectedMembers] = useState<Profile[]>([]);
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
 
+  // Add New Person Form State
+  const [showAddPerson, setShowAddPerson] = useState(false);
+  const [newPersonName, setNewPersonName] = useState("");
+  const [newPersonPassword, setNewPersonPassword] = useState("123456");
+  const [creatingPerson, setCreatingPerson] = useState(false);
+
   const {
     register,
     handleSubmit,
@@ -103,6 +109,48 @@ export default function CreateTripPage() {
   const selectAllMembers = () => {
     const others = searchResults.filter((u) => u.id !== user?.id);
     setSelectedMembers(others);
+  };
+
+  const handleCreateNewPerson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = newPersonName.trim();
+    if (!clean) {
+      toast.error("Please enter a name");
+      return;
+    }
+
+    setCreatingPerson(true);
+    try {
+      const res = await apiFetch("/api/users", {
+        method: "POST",
+        body: JSON.stringify({
+          full_name: clean,
+          password: newPersonPassword.trim() || "123456",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Failed to create person");
+        return;
+      }
+
+      const created: Profile = data.user;
+      toast.success(`User "${created.full_name}" added! (Password: ${newPersonPassword.trim() || "123456"})`);
+      // Add to selected members
+      setSelectedMembers((prev) => {
+        if (prev.some((m) => m.id === created.id)) return prev;
+        return [...prev, created];
+      });
+      setMemberCounts((prev) => ({ ...prev, [created.id]: 1 }));
+      setNewPersonName("");
+      setNewPersonPassword("123456");
+      setShowAddPerson(false);
+      fetchUsers("");
+    } catch {
+      toast.error("Network error while creating person");
+    } finally {
+      setCreatingPerson(false);
+    }
   };
 
   const totalHeadcount =
@@ -317,14 +365,91 @@ export default function CreateTripPage() {
                 </div>
               </div>
 
-              {/* Search Existing Users by Name */}
+              {/* Search Existing Users by Name & Add New Person */}
               <div>
-                <label
-                  htmlFor="memberSearch"
-                  className="block text-sm font-semibold text-slate-700"
-                >
-                  Add Members by Name
-                </label>
+                <div className="flex items-center justify-between">
+                  <label
+                    htmlFor="memberSearch"
+                    className="block text-sm font-semibold text-slate-700"
+                  >
+                    Add Members by Name
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddPerson(!showAddPerson)}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:underline"
+                  >
+                    <UserPlus className="h-3.5 w-3.5" />
+                    <span>{showAddPerson ? "Cancel" : "+ Register New Person"}</span>
+                  </button>
+                </div>
+
+                {/* Inline Add New Person Card */}
+                {showAddPerson && (
+                  <div className="mt-2.5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                    <p className="text-xs font-bold text-emerald-950">
+                      Register a New Person
+                    </p>
+                    <p className="text-[11px] text-emerald-800">
+                      They will be added to the database and can log into the app with their password.
+                    </p>
+
+                    <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700">
+                          Full Name / Username
+                        </label>
+                        <input
+                          type="text"
+                          value={newPersonName}
+                          onChange={(e) => setNewPersonName(e.target.value)}
+                          placeholder="e.g., Kamal, Farhana, Rahim"
+                          className="mt-1 block w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700">
+                          Password (Default: 123456)
+                        </label>
+                        <input
+                          type="text"
+                          value={newPersonPassword}
+                          onChange={(e) => setNewPersonPassword(e.target.value)}
+                          placeholder="123456"
+                          className="mt-1 block w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowAddPerson(false)}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCreateNewPerson}
+                        disabled={creatingPerson || !newPersonName.trim()}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {creatingPerson ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Adding...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="h-3.5 w-3.5" />
+                            <span>Register & Add to Trip</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="relative mt-1.5">
                   <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
                     <Search className="h-4 w-4" />

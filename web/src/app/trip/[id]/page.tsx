@@ -30,12 +30,14 @@ import {
   ShieldCheck,
   Minus,
   Plus,
+  UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Navbar } from "@/components/Navbar";
 import { useApp } from "@/components/AppProvider";
 import {
   Expense,
+  Profile,
   SettlementTransaction,
   Trip,
   TripReport,
@@ -81,6 +83,13 @@ export default function TripDetailPage() {
     null
   );
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
+
+  // Add Member to ongoing trip state
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [allUsers, setAllUsers] = useState<Profile[]>([]);
+  const [selectedUserToAdd, setSelectedUserToAdd] = useState("");
+  const [newMemberFamilyCount, setNewMemberFamilyCount] = useState(1);
+  const [addingMember, setAddingMember] = useState(false);
 
   // Admin Edit Expense state
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -208,6 +217,53 @@ export default function TripDetailPage() {
       toast.error("Network error updating member count");
     } finally {
       setUpdatingMemberId(null);
+    }
+  };
+
+  const openAddMemberModal = async () => {
+    setShowAddMemberModal(true);
+    try {
+      const res = await apiFetch("/api/users");
+      if (res.ok) {
+        const data = await res.json();
+        setAllUsers(data.users || []);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleAddMemberToTrip = async () => {
+    if (!selectedUserToAdd) {
+      toast.error("Please choose a person to add");
+      return;
+    }
+    setAddingMember(true);
+    try {
+      const res = await apiFetch(`/api/trips/${tripId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          member_user_id: selectedUserToAdd,
+          family_count: newMemberFamilyCount,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Failed to add member");
+        return;
+      }
+      if (data.trip) {
+        setTrip(data.trip);
+      }
+      toast.success("Member added to this trip!");
+      setShowAddMemberModal(false);
+      setSelectedUserToAdd("");
+      setNewMemberFamilyCount(1);
+      loadTripAndExpenses();
+    } catch {
+      toast.error("Network error adding member");
+    } finally {
+      setAddingMember(false);
     }
   };
 
@@ -613,6 +669,118 @@ export default function TripDetailPage() {
                         </div>
                       );
                     })}
+
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={openAddMemberModal}
+                        className="inline-flex items-center gap-1 rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50 px-2.5 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 print:hidden"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        <span>+ Add Member</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Add Member to Trip Modal */}
+              {showAddMemberModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
+                  <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-base font-bold text-slate-900">
+                        Add Member to {trip.name}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddMemberModal(false)}
+                        className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700">
+                          Select Person:
+                        </label>
+                        <select
+                          value={selectedUserToAdd}
+                          onChange={(e) => setSelectedUserToAdd(e.target.value)}
+                          className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                          <option value="">-- Choose member --</option>
+                          {allUsers
+                            .filter(
+                              (u) =>
+                                !trip.members?.some((tm) => tm.id === u.id)
+                            )
+                            .map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.full_name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700">
+                          Family Count (1, 2, 3, 4...):
+                        </label>
+                        <div className="mt-1 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setNewMemberFamilyCount((prev) =>
+                                Math.max(1, prev - 1)
+                              )
+                            }
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-700"
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="w-10 text-center font-bold text-slate-900">
+                            {newMemberFamilyCount}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setNewMemberFamilyCount((prev) => prev + 1)
+                            }
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-700"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowAddMemberModal(false)}
+                        className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAddMemberToTrip}
+                        disabled={addingMember || !selectedUserToAdd}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {addingMember ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Adding...</span>
+                          </>
+                        ) : (
+                          <span>Add to Trip</span>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
