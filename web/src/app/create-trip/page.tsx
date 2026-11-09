@@ -271,14 +271,100 @@ export default function CreateTripPage() {
                       Use <strong>- / +</strong> to set how many family members (1, 2, 3, 4...) are with each person
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={selectAllMembers}
-                    className="text-xs font-semibold text-emerald-600 hover:text-emerald-700"
-                  >
-                    + Add All Registered Members
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddPerson(!showAddPerson)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs transition hover:bg-emerald-700"
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      <span>{showAddPerson ? "✕ Close Form" : "+ Register New Person"}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={selectAllMembers}
+                      className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                    >
+                      + Add All Registered
+                    </button>
+                  </div>
                 </div>
+
+                {/* Inline Add New Person Card */}
+                {showAddPerson && (
+                  <div className="mt-3 rounded-2xl border-2 border-emerald-300 bg-emerald-50/80 p-4 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-bold uppercase tracking-wider text-emerald-900">
+                        Register a New Person
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddPerson(false)}
+                        className="rounded-lg p-1 text-slate-400 hover:bg-emerald-100 hover:text-slate-700"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <p className="mt-0.5 text-xs text-emerald-800">
+                      They will be added to the database and can log into the app with their password.
+                    </p>
+
+                    <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700">
+                          Full Name / Username <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={newPersonName}
+                          onChange={(e) => setNewPersonName(e.target.value)}
+                          placeholder="e.g., Kamal, Farhana, Rahim"
+                          className="mt-1 block w-full rounded-xl border border-emerald-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700">
+                          Password (Default: 123456)
+                        </label>
+                        <input
+                          type="text"
+                          value={newPersonPassword}
+                          onChange={(e) => setNewPersonPassword(e.target.value)}
+                          placeholder="123456"
+                          className="mt-1 block w-full rounded-xl border border-emerald-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-3.5 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowAddPerson(false)}
+                        className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCreateNewPerson}
+                        disabled={creatingPerson || !newPersonName.trim()}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {creatingPerson ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Adding...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="h-3.5 w-3.5" />
+                            <span>Register & Add to Trip</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="mt-2.5 space-y-2 rounded-xl border border-slate-200/80 bg-slate-50/50 p-3">
                   {/* Admin Row */}
@@ -487,11 +573,10 @@ export default function CreateTripPage() {
                             key={candidate.id}
                             type="button"
                             onClick={() => toggleMember(candidate)}
-                            className={`flex w-full items-center justify-between px-4 py-3 text-left text-sm transition ${
-                              isAdded
+                            className={`flex w-full items-center justify-between px-4 py-3 text-left text-sm transition ${isAdded
                                 ? "bg-emerald-50/70 text-emerald-900"
                                 : "bg-white text-slate-800 hover:bg-slate-50"
-                            }`}
+                              }`}
                           >
                             <div className="flex items-center gap-2.5">
                               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-sky-500 text-xs font-bold text-white">
